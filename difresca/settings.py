@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 # import djongo
+from datetime import timedelta
 import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,12 +43,19 @@ INSTALLED_APPS = [
     'api.apps.ApiConfig',
     'rest_framework',
     'django_rest_passwordreset',
+    'rest_framework_simplejwt',
 ]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
+}
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=3600),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=20),
+    "UPDATE_LAST_LOGIN": True,
+
 }
 
 MIDDLEWARE = [
@@ -61,7 +69,11 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = []
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+]
 ROOT_URLCONF = 'difresca.urls'
 AUTH_USER_MODEL = 'api.Account'
 
@@ -100,6 +112,14 @@ DATABASES = {
             'HOST':'127.0.0.1',
             'PORT':'3306',
         }
+    # 'default': {
+    #     'ENGINE': 'django.db.backends.mysql',
+    #     'NAME': 'difresca-backend-31343773b6',
+    #     'USER': 'admin',
+    #     'PASSWORD': 'yev5f9hz5o',
+    #     'HOST':'shareddb-v.hosting.stackcp',
+    #     'PORT':'3306',
+    # }
 }
 
 
@@ -146,7 +166,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 MEDIA_ROOT = os.path.join(BASE_DIR,"assets")
 MEDIA_URL = '/assets/'
 

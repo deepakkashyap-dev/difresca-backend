@@ -7,7 +7,21 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from django.utils.text import slugify
 
 
-class MyAccountManager(BaseUserManager):  # Custom user model manager where email is the unique identifiers for authentication instead of usernames.
+
+HOME_PAGE_BLOCK_TYPE = (
+    ("HERO_IMAGE", "HERO_IMAGE"),
+    ("CATEGORY_PRODUCT", "CATEGORY_PRODUCT"),
+    ("STICKY_NOTES", "STICKY_NOTES"),
+    # ("BRAND_BANNER", "BRAND_BANNER"),
+)
+
+def no_whitespace_validator(value):  # validator for homepage block name
+    if ' ' in value:
+        raise models.ValidationError("Spaces are not allowed in this field.")
+
+
+# Custom user model manager where email is the unique identifiers for authentication instead of usernames.
+class MyAccountManager(BaseUserManager):
     def create_user(self, email, name, password=None, **extra_fields):
         if not email:
             return ValueError("Users must have an email address")
@@ -36,7 +50,9 @@ class MyAccountManager(BaseUserManager):  # Custom user model manager where emai
         user.save(using=self._db)
         return user
 
-class Account(AbstractUser, PermissionsMixin):  # Custom user model where email is the unique identifiers for authentication instead of usernames.
+
+# Custom user model where email is the unique identifiers for authentication instead of usernames.
+class Account(AbstractUser, PermissionsMixin):
     username = models.CharField(max_length=100, unique=True, null=True)
     name = models.CharField(max_length=100)
     email = models.EmailField(unique=True)
@@ -64,8 +80,9 @@ class Account(AbstractUser, PermissionsMixin):  # Custom user model where email 
     def __str__(self):
         return self.email
 
+
 class Address(models.Model):    # Address model for user
-    user = models.ForeignKey(Account, on_delete=models.CASCADE)
+    user = models.ForeignKey(Account, on_delete=models.CASCADE) #delete if user is deleted
     address_line1 = models.CharField(max_length=255)
     address_line2 = models.CharField(max_length=255, blank=True, null=True)
     landmark = models.CharField(max_length=255, blank=True, null=True)
@@ -75,7 +92,8 @@ class Address(models.Model):    # Address model for user
     postal_code = models.CharField(max_length=10)
     country = models.CharField(max_length=50)
 
-class Tag(models.Model): # Tag model for product
+
+class Tag(models.Model):  # Tag model for product
     name = models.CharField(max_length=50, unique=True)
     slug = models.CharField(max_length=50, unique=True, editable=False)
     created_at = models.DateTimeField(default=timezone.now, editable=False)
@@ -93,7 +111,8 @@ class Tag(models.Model): # Tag model for product
         self.updated_at = timezone.now()
         super().save(*args, **kwargs)
 
-class Category(models.Model): # Category model for product
+
+class Category(models.Model):  # Category model for product
     name = models.CharField(max_length=255)
     slug = models.CharField(max_length=255, editable=False)
     category_image = models.ImageField(
@@ -131,10 +150,19 @@ class Category(models.Model): # Category model for product
             # Save the model again to store the thumbnail_image field
             super().save(*args, **kwargs)
 
-class Subcategory(models.Model): # Subcategory model for product
+
+def get_default_product_category():
+    default_category, _ = Category.objects.get_or_create(name="Others")
+    return default_category.id
+
+def get_default_product_sub_category():
+    default_subcategory, _ = Subcategory.objects.get_or_create(name="Others")
+    return default_subcategory.id
+
+class Subcategory(models.Model):  # Subcategory model for product
     name = models.CharField(max_length=255)
     slug = models.CharField(max_length=255, editable=False)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category,default=get_default_product_category, on_delete=models.SET(get_default_product_category)) # set to default category if category is deleted
     created_at = models.DateTimeField(default=timezone.now, editable=False)
     updated_at = models.DateTimeField(default=timezone.now, editable=False)
 
@@ -145,9 +173,25 @@ class Subcategory(models.Model): # Subcategory model for product
         self.updated_at = timezone.now()
         self.slug = slugify(self.name)
         super().save(*args, **kwargs)
-   
-class Product(models.Model): # Product model
-    name = models.CharField(max_length=255) 
+
+class HomepageBlock(models.Model):  # Homepage block model
+    type = models.CharField(max_length=255, choices=HOME_PAGE_BLOCK_TYPE)
+    heading = models.CharField(max_length=255, blank=True, null=True)
+    sub_Heading = models.CharField(max_length=255, blank=True, null=True)
+    block_name = models.CharField(max_length=255, validators=[
+                                  no_whitespace_validator], blank=False)
+    sequence = models.IntegerField(blank=False, unique=True)
+    is_active = models.BooleanField(default=True)
+    slider = models.BooleanField(default=False)
+    product_count = models.IntegerField(default=0)
+    Card_In_A_Row = models.CharField(
+        max_length=100, blank=True, null=True, default=None)
+
+    def __str__(self):
+        return f"{self.block_name}"
+    
+class Product(models.Model):  # Product model
+    name = models.CharField(max_length=255)
     slug = models.CharField(max_length=255, editable=False)
     description = models.TextField()
     tags = models.ManyToManyField(Tag)
@@ -167,9 +211,11 @@ class Product(models.Model): # Product model
     thumbnail = models.ImageField(
         upload_to='images/product/thumbnails/', blank=True, editable=False)
     # gallery_images = models.ManyToManyField('ProductGallery', blank=True,null=True,related_name='products') #,related_name='products'
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True)
+    category = models.ForeignKey(Category,default=get_default_product_category, on_delete=models.SET(get_default_product_category)) # set to default category if category is deleted
     subcategory = models.ForeignKey(
-        Subcategory, on_delete=models.CASCADE, null=True, blank=True)
+        Subcategory,default= get_default_product_sub_category, on_delete=models.SET(get_default_product_sub_category), null=True, blank=True)
+    section = models.ForeignKey( 
+        HomepageBlock, on_delete=models.CASCADE, null=True, blank=True, limit_choices_to={'is_active': True, 'type__in': ['CATEGORY_PRODUCT']}) #
     created_at = models.DateTimeField(default=timezone.now, editable=False)
     updated_at = models.DateTimeField(default=timezone.now, editable=False)
 
@@ -200,7 +246,8 @@ class Product(models.Model): # Product model
             super().save(*args, **kwargs)
             thumb_io.close()
 
-class ProductGallery(models.Model): # Product gallery model
+
+class ProductGallery(models.Model):  # Product gallery model
     product = models.ForeignKey(Product, on_delete=models.CASCADE, blank=True,
                                 related_name='gallery_images', default='')  # , null=True,related_name='images'
     image = models.ImageField(upload_to='images/gallery/main/')
@@ -234,55 +281,40 @@ class ProductGallery(models.Model): # Product gallery model
             super().save(*args, **kwargs)
             thumb_io.close()
 
-class Order(models.Model): # Order model
+
+class Order(models.Model):  # Order model
     user = models.ForeignKey(Account, on_delete=models.CASCADE)
     products = models.ManyToManyField(Product, through='OrderItem')
     order_date = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=[(
         'Pending', 'Pending'), ('Shipped', 'Shipped'), ('Delivered', 'Delivered')])
 
-class OrderItem(models.Model): ## Order item model
+
+class OrderItem(models.Model):  # Order item model
     order = models.ForeignKey(Order, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
 
-HOME_PAGE_BLOCK_TYPE = (
-        ("HERO_IMAGE", "HERO_IMAGE"),
-        ("CATEGORY_PRODUCT", "CATEGORY_PRODUCT"),
-        ("STICKY_NOTES", "STICKY_NOTES"),
-        # ("BRAND_BANNER", "BRAND_BANNER"),
-)
-def no_whitespace_validator(value): # validator for homepage block name
-    if ' ' in value:
-        raise models.ValidationError("Spaces are not allowed in this field.")
-
-class HomepageBlock(models.Model): # Homepage block model
-    type = models.CharField(max_length = 255, choices = HOME_PAGE_BLOCK_TYPE)
-    heading = models.CharField(max_length=255, blank=True, null=True)
-    sub_Heading = models.CharField(max_length=255, blank=True, null=True)
-    block_name = models.CharField(max_length=255,validators=[no_whitespace_validator],blank=False)
-    sequence = models.IntegerField(blank=False,unique=True)
-    is_active = models.BooleanField(default=True)
-    slider =  models.BooleanField(default=False)
-    product_count = models.IntegerField(default=0)
-    Card_In_A_Row = models.CharField( max_length=100, blank=True, null=True, default=None )
-    def __str__(self):
-        return f"{self.block_name}"
-    
-class Banners(models.Model): # Banner model
-    WIDTH_CHOICE = (  ("3", "25 %"),  ("6", "50 %"),   ("9", "75 %"),  ("12", "full") ) 
-    Banner_name =  models.CharField(max_length=100,null=True,blank=True)
+class Banners(models.Model):  # Banner model
+    WIDTH_CHOICE = (("3", "25 %"),("4", "33.33 %"), ("6", "50 %"),
+                    ("9", "75 %"),  ("12", "full"))
+    Banner_name = models.CharField(max_length=100, null=True, blank=True)
     Banner_image = models.ImageField(upload_to='images/banner/', default='')
-    button_text = models.CharField(max_length=100,null=True,blank=True)
-    button_URL = models.CharField(max_length=100,null=True,blank=True)
-    button_text_color = models.CharField(max_length=100,null=True,blank=True) 
-    button_text_color_hover = models.CharField(max_length=100,null=True,blank=True) 
-    button_background = models.CharField(max_length=100,null=True,blank=True)
-    button_background_hover = models.CharField(max_length=100,null=True,blank=True)
-    width = models.CharField(max_length=100,choices = WIDTH_CHOICE, default="12")
-    relation = models.ForeignKey(HomepageBlock, on_delete=models.CASCADE,null=True)
-    sequence = models.IntegerField(blank=False,unique=True,null=True)
+    button_text = models.CharField(max_length=100, null=True, blank=True)
+    button_URL = models.CharField(max_length=100, null=True, blank=True)
+    button_text_color = models.CharField(max_length=100, null=True, blank=True)
+    button_text_color_hover = models.CharField(
+        max_length=100, null=True, blank=True)
+    button_background = models.CharField(max_length=100, null=True, blank=True)
+    button_background_hover = models.CharField(
+        max_length=100, null=True, blank=True)
+    width = models.CharField(
+        max_length=100, choices=WIDTH_CHOICE, default="12")
+    relation = models.ForeignKey(
+        HomepageBlock, on_delete=models.CASCADE, null=True, blank=True, limit_choices_to={'is_active': True, 'type__in': ['HERO_IMAGE', 'STICKY_NOTES']})
+    sequence = models.IntegerField(blank=False, unique=True, null=True)
     is_active = models.BooleanField(default=True)
+
     def __str__(self):
         return f"{self.Banner_name}, width:{self.width}, {self.relation} , active:{self.is_active} "
